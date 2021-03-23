@@ -1,3 +1,290 @@
+# react context api
+
+Context API를 기반으로 리덕스, 리액트 라우터, styled-components등의 라이브러리가 구현되어 있습니다.
+기존에 최상위 컴포넌트에서 여러 컴포넌트를 거쳐 특정 컴포넌트로 원하는 정보를 보낸다고 합시다. 규모가 커지고 여러 컴포넌트에서 정보를 필요로 한다면
+매우 매우 복잡해집니다. 이럴 때 전역적으로 변수를 관리할 수 있게 하는 것이 Context API입니다.
+
+## create Context & Consumer
+
+Context를 생성할 때 `createContext`를 사용하며 초기 상태를 전달해주면 됩니다. (꼭 전달해주지는 않아도 됩니다.) 색을 관리하는 ColorContext를 정의하는 color.js 파일을 만들고 ColorContext로부터 색을 받아와 사용하는 ColorBox component를 만들어 보겠습니다.
+
+### project
+
+```
+project
+  |--src
+    |--contexts
+      |--color.js
+    |--components
+      |--ColorBox.js
+```
+
+### color.js
+
+```javascript
+import { createContext } from "react";
+
+const ColorContext = createContext({ color: "black" });
+
+export default ColorContext;
+```
+
+### ColorBox.js
+
+ColorContext에 저장된 값을 사용하기 위해서는 ColorContext.Consumer의 자식으로 component를 return하는 함수를 전달합니다.
+이런 패턴을 Function as a child 혹은 Render Props라고 합니다.
+
+이해를 돕기 위해 부연 설명을 하자면 Consumer라는 Component로 함수가 children props로 전달되면 Consumer component에서 이 함수에 value를 전달해 실행시킨다고 생각하면 됩니다.
+
+```javascript
+import React from "react";
+import ColorContext from "../contexts/color";
+
+const ColorBox = () => {
+  return (
+    <ColorContext.Consumer>
+      {(value) => (
+        <div
+          style={{
+            background: value.color,
+            width: "64px",
+            height: "64px",
+          }}
+        />
+      )}
+    </ColorContext.Consumer>
+  );
+};
+
+export default ColorBox;
+```
+
+## Provider
+
+context에 저장된 값(value)을 Provider를 이용해서 변경할 수도 있습니다.
+
+### project
+
+```
+project
+  |--src
+   *|--App.js
+    |--contexts
+      |--color.js
+    |--components
+      |--ColorBox.js
+```
+
+### App.js
+
+App.js에서 렌더링한 ColorBox component를 ColorContext.Provider로 감싸줍니다. ColorContext.Provider에 value property를 전달하지 않으면 오류가 발생하므로 주의합니다. Provider가 전달한 값과 초기값의 우선순위는 무조건 Proivider에게 있습니다. 초기값은 Provider가 전달하는 값이 없을 경우에 사용됩니다.
+
+```javascript
+import React from "react";
+import ColorBox from "./components/ColorBox";
+import ColorContext from "./contexts/color";
+
+const App = () => {
+  return (
+    <ColorContext.Provider value={{ color: "red" }}>
+      <ColorBox />
+    </ColorContext.Provider>
+  );
+};
+
+export default App;
+```
+
+## 동적 Context 사용하기
+
+위와 같이 초기값이나 Provider가 제공하는 값을 이용하고자 하면 고정적인 값만 사용할 수 있습니다. Context의 값을 업데이트하기 위한 방법을 알아봅니다.
+
+### project
+
+```
+project
+  |--src
+   *|--App.js
+    |--contexts
+     *|--color.js
+    |--components
+     +|--SelectColors.js
+     *|--ColorBox.js
+```
+
+### color.js
+
+- createContext 기본값
+
+  createContext에 기본 값으로 전체적인 틀을 모두 전달해주었는데요. 사실 아무것도 전달하지 않아도 됩니다. 다만 이렇게 해주게 되면 내부 값이 어떻게 구성되어 있는지 파악하기도 쉽습니다. 또한 반드시 state와 actions로 나누어 관리해야하는 것은 아니지만 이렇게 하는 것이 유지보수에도 쉽습니다.
+
+```javascript
+import { Children, createContext, useState } from "react";
+
+const ColorContext = createContext({
+  state: { color: "black", subcolor: "red" },
+  actions: {
+    setColor: () => {},
+    setSubcolor: () => {},
+  },
+});
+
+const ColorProvider = ({ children }) => {
+  const [color, setColor] = useState("black");
+  const [subcolor, setSubcolor] = useState("red");
+
+  const value = {
+    state: { color, subcolor },
+    actions: { setColor, setSubcolor },
+  };
+
+  return (
+    <ColorContext.Provider value={value}>{children}</ColorContext.Provider>
+  );
+};
+
+const { Consumer: ColorConsumer } = ColorContext;
+
+export { ColorProvider, ColorConsumer };
+
+export default ColorContext;
+```
+
+### App.js
+
+```javascript
+import React from "react";
+import ColorBox from "./components/ColorBox";
+import SelectColors from "./components/SelectColors";
+import { ColorProvider } from "./contexts/color";
+
+const App = () => {
+  return (
+    <ColorProvider>
+      <SelectColors />
+      <ColorBox />
+    </ColorProvider>
+  );
+};
+
+export default App;
+```
+
+### ColorBox.js
+
+```javascript
+import React from "react";
+import { ColorConsumer } from "../contexts/color";
+
+const ColorBox = () => {
+  return (
+    <ColorConsumer>
+      {(value) => (
+        <>
+          <div
+            style={{
+              background: value.state.color,
+              width: "64px",
+              height: "64px",
+            }}
+          />
+          <div
+            style={{
+              width: "32px",
+              height: "32px",
+              background: value.state.subcolor,
+            }}
+          />
+        </>
+      )}
+    </ColorConsumer>
+  );
+};
+
+export default ColorBox;
+```
+
+### SelectColors.js
+
+```javascript
+import React from "react";
+import { ColorConsumer } from "../contexts/color";
+
+const colors = ["red", "orange", "yellow", "green", "blue", "indigo", "violet"];
+
+const SelectColors = () => {
+  return (
+    <div>
+      <h2>색상을 선택하세요.</h2>
+      <ColorConsumer>
+        {({ actions }) => {
+          return (
+            <div
+              style={{
+                display: "flex",
+              }}
+            >
+              {colors.map((color) => (
+                <div
+                  key={color}
+                  onClick={() => actions.setColor(color)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    actions.setSubcolor(color);
+                  }}
+                  style={{
+                    background: color,
+                    width: "24px",
+                    height: "24px",
+                  }}
+                />
+              ))}
+            </div>
+          );
+        }}
+      </ColorConsumer>
+    </div>
+  );
+};
+
+export default SelectColors;
+```
+
+## useContext
+
+useContext를 사용하면 Consumer를 이용하지 않고 즉 Render Props 패턴을 사용하지 않고도 context 값에 접근할 수 있습니다.
+사용방법은 아래와 같이 Context를 useContext로 감싸주면 state를 받아올 수 있습니다.
+
+### ColorBox.js
+
+```javascript
+import { useContext } from "react";
+import ColorContext from "../contexts/color";
+
+const ColorBox = () => {
+  const { state } = useContext(ColorContext);
+
+  return (
+    <>
+      <div
+        style={{
+          width: "64px",
+          height: "64px",
+          background: state.color,
+        }}
+      />
+      <div
+        style={{
+          width: "32px",
+          height: "32px",
+          background: state.subcolor,
+        }}
+      />
+    </>
+  );
+};
+```
+
 # react router dom
 
 HTML5의 History API를 사용하여 페이지를 새로고침하지 않고도 주소를 변경하고, 현재 주소에 관련된 정보를 props로 쉽게 조회하거나 사용할 수 있다.
